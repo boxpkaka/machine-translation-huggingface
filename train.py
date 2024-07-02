@@ -9,12 +9,12 @@ use_8bit = True
 
 
 def main(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_dir)
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
+    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, local_files_only=True)
     if gradient_checkpoint:
         model.gradient_checkpointing_enable()
     
-    train_dataset, val_dataset = get_mapped_dataset(args.data, tokenizer)
+    train_dataset, val_dataset = get_mapped_dataset(args, tokenizer)
     print(len(train_dataset))
     training_args = Seq2SeqTrainingArguments(
         output_dir="./results",
@@ -46,7 +46,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='eval whisper')
     parser.add_argument('--data',                   help='JSON path of dataset',       type=str)
-    parser.add_argument('--model_dir',              help='model directory',              type=str)
+    parser.add_argument('--model_dir',              help='model directory',            type=str)
+    parser.add_argument('--is_nllb',                action='store_true')
     
     # parser.add_argument('--model_index',            help='index of model list',        type=int)
     # parser.add_argument('--lora_dir', default=None, help='directory of LoRA file',     type=str)

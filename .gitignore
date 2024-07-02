@@ -1,4 +1,5 @@
 result
-dataset.json
 test.py
 val.py
+data
+__pycache__

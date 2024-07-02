@@ -1,7 +1,7 @@
 #!/bin/bash
 
-data='dataset.json'
-model_dir='/home/mingdongyu/model/huggingface/nllb-200-distilled-600M/'
+data='data/opus_zh_es.json'
+model_dir='/srv/model/huggingface/opus-mt-zh-en'
 
 # 指定使用的GPU
 export CUDA_VISIBLE_DEVICES=0,1

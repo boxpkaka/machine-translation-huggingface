@@ -1,8 +1,24 @@
 from datasets import Dataset, concatenate_datasets
 from typing import List, Dict
 from functools import partial
+
+import torch
 import json
 
+
+class TranslationDataset(torch.utils.data.Dataset):
+    def __init__(self, data:List[Dict[str, str]], json_path: str ,max_length=128, truncation=True, padding=True ) -> None:
+        self.data = data
+        
+        
+        
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        pass
+        
+    
 
 def get_lines(path: str) -> List[str]:
     with open(path, 'r', encoding='utf-8') as f:
@@ -34,8 +50,8 @@ def _get_raw_dataset(json_path: str):
     for i in range(line_counts[0]):
         translation_entry = {lang: language_data[lang][i] for lang in languages}
         data["translation"].append(translation_entry)
-        dataset = Dataset.from_dict(data)
-    
+   
+    dataset = Dataset.from_dict(data)
     train_test_split = dataset.train_test_split(test_size=0.1)
     
     train_dataset = train_test_split['train']
@@ -43,17 +59,19 @@ def _get_raw_dataset(json_path: str):
 
     return train_dataset, val_dataset, lang_couples
 
-def _preprocess_function(dataset, src_lang, tgt_lang, tokenizer):
-    tokenizer.src_lang = src_lang
-    tokenizer.tgt_lang = tgt_lang
+def _preprocess_function(dataset, src_lang, tgt_lang, tokenizer, is_nllb):
+    if is_nllb:
+        tokenizer.src_lang = src_lang
+        tokenizer.tgt_lang = tgt_lang
+
     inputs = [item[src_lang] for item in dataset["translation"]]
     targets = [item[tgt_lang] for item in dataset["translation"]]
     tokenized_inputs = tokenizer(inputs, text_target=targets, max_length=128, truncation=True, padding=True)
 
     return tokenized_inputs
 
-def get_mapped_dataset(json_path, tokenizer):
-    train_dataset, val_dataset, lang_couples = _get_raw_dataset(json_path)
+def get_mapped_dataset(args, tokenizer):
+    train_dataset, val_dataset, lang_couples = _get_raw_dataset(args.data)
     
     final_train_dataset = []
     final_val_dataset = []
@@ -62,13 +80,21 @@ def get_mapped_dataset(json_path, tokenizer):
             preprocess = partial(_preprocess_function, 
                                 src_lang=src_lang,
                                 tgt_lang=tgt_lang,
-                                tokenizer=tokenizer)
-            tokenized_train_dataset = train_dataset.map(preprocess, batched=True)
-            tokenized_val_dataset = val_dataset.map(preprocess, batched=True) 
+                                tokenizer=tokenizer,
+                                is_nllb=args.is_nllb)
+            map_kwargs={
+                "function": preprocess, 
+                "batched": True,
+                "batch_size": 5000,
+                "writer_batch_size": 5000,
+                "num_proc": 16,
+                "load_from_cache_file": True}
+            tokenized_train_dataset = train_dataset.map(**map_kwargs)
+            tokenized_val_dataset = val_dataset.map(**map_kwargs) 
 
             final_train_dataset.append(tokenized_train_dataset)
             final_val_dataset.append(tokenized_val_dataset)
-
+            
     final_train_dataset = concatenate_datasets(final_train_dataset)
     final_val_dataset = concatenate_datasets(final_val_dataset)
             
@@ -76,8 +102,15 @@ def get_mapped_dataset(json_path, tokenizer):
 
 
 if __name__ == "__main__":
-    train, val, _ = get_mapped_dataset("dataset.json")
-    print(train[:10])
-
-
+    from transformers import AutoTokenizer
+    import argparse
+    
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data', default="data/opus_zh_es.json",       type=str)
+    parser.add_argument('--is_nllb', action='store_true')
+    tokenizer = AutoTokenizer.from_pretrained("/srv/model/huggingface/opus-mt-zh-en")
+    args = parser.parse_args()
+    
+    _, _ = get_mapped_dataset(args, tokenizer)
+    
 
