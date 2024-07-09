@@ -1,4 +1,5 @@
-from prepare_dataset import get_mapped_dataset
+from prepare_dataset import TranslationDataset, TranslationIterableDataset
+from tensorboard_cpu_memo import MemoryMonitorCallback
 
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
@@ -14,22 +15,29 @@ def main(args):
     if gradient_checkpoint:
         model.gradient_checkpointing_enable()
     
-    train_dataset, val_dataset = get_mapped_dataset(args, tokenizer)
-    print(len(train_dataset))
+    train_dataset = TranslationDataset(args.train_data, tokenizer)
+    val_dataset = TranslationDataset(args.val_data, tokenizer)
+ 
     training_args = Seq2SeqTrainingArguments(
-        output_dir="./results",
+        output_dir=args.output_dir,
         eval_strategy="steps",
         save_strategy="steps",
-        save_steps=100,
-        save_total_limit=3,
+        eval_steps=20000,
+        save_steps=500,
+        save_total_limit=5,
         learning_rate=2e-5,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=16,
+        per_device_train_batch_size=args.train_batch,
+        per_device_eval_batch_size=args.eval_batch,
         weight_decay=0.01,
-        num_train_epochs=2,
+        num_train_epochs=10,
         predict_with_generate=True,
-        gradient_checkpointing=True,
+        gradient_checkpointing=False,
         bf16=True,
+        report_to=["tensorboard"],
+        logging_dir=args.logging_dir,
+        logging_steps=100,
+        dataloader_num_workers=16,
+        # max_steps=1126126
     )
 
     trainer = Seq2SeqTrainer(
@@ -38,32 +46,25 @@ def main(args):
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
+        callbacks=[MemoryMonitorCallback(log_dir=args.logging_dir)]
     )
-
-    # trainer.train()
+    if args.checkpoint:
+        trainer.train(resume_from_checkpoint=args.checkpoint)
+    else:
+        trainer.train()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='eval whisper')
-    parser.add_argument('--data',                   help='JSON path of dataset',       type=str)
+    parser.add_argument('--train_data',             help='JSON path of dataset',       type=str)
+    parser.add_argument('--val_data',               help='JSON path of dataset',       type=str)
     parser.add_argument('--model_dir',              help='model directory',            type=str)
     parser.add_argument('--is_nllb',                action='store_true')
+    parser.add_argument('--train_batch',             type=int)
+    parser.add_argument('--eval_batch',              type=int)
+    parser.add_argument('--checkpoint',              default=None,                     type=str)
+    parser.add_argument('--logging_dir',             default=None,                     type=str)
+    parser.add_argument('--output_dir',              default=None,                     type=str)
     
-    # parser.add_argument('--model_index',            help='index of model list',        type=int)
-    # parser.add_argument('--lora_dir', default=None, help='directory of LoRA file',     type=str)
-    # parser.add_argument('--data_index',             help='index of dataset list',      type=int)
-    # parser.add_argument('--language',               help='whisper inference language', type=str)
-    # parser.add_argument('--batch_size',             help='batch size',                 type=int)
-    # parser.add_argument('--use_cpu', default=False, help='ct2: use cpu of ct2model',   type=bool)
-    # parser.add_argument('--compute_type',           help='ct2: auto/int8/float16...',  type=str)
-    # parser.add_argument('--num_workers',            help='num of workers          ',   type=int)
-    # parser.add_argument('--pipeline',               help='use transformers pipeline',  type=int)
-    # parser.add_argument('--use_flash_attention_2',  help='whether use flash attn 2',   type=int)
-    # parser.add_argument('--torch_dtype',            help='fp16, bf16',                 type=str)
-    # parser.add_argument('--use_bettertransformer',  help='pipeline options',           type=int)
-    # parser.add_argument('--use_compile',            help='pipeline options',           type=int)
-    # parser.add_argument('--assistant_model_path',   help='pipeline options',           type=str)
-    # parser.add_argument('--preheat',                help='whether preheat first',      type=int)
-    # parser.add_argument('--gpu',     default=0,     help='gpu id',                     type=str)
     args = parser.parse_args()
     main(args)

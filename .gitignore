@@ -3,3 +3,9 @@ test.py
 val.py
 data
 __pycache__
+log
+tensorboard
+eval
+merge_spm
+results
+ttt.py

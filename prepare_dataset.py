@@ -1,116 +1,129 @@
-from datasets import Dataset, concatenate_datasets
-from typing import List, Dict
-from functools import partial
-
-import torch
+from torch.utils.data import Dataset, IterableDataset
+from typing import List, Dict, Iterator
+from multiprocessing import Pool
 import json
+import numpy as np
 
 
-class TranslationDataset(torch.utils.data.Dataset):
-    def __init__(self, data:List[Dict[str, str]], json_path: str ,max_length=128, truncation=True, padding=True ) -> None:
-        self.data = data
-        
-        
-        
+class TranslationDataset(Dataset):
+    def __init__(self, json_path, tokenizer, max_length: int = 256):
+        self.data = self._load_data(json_path)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
     def __len__(self):
         return len(self.data)
-    
+
     def __getitem__(self, idx):
-        pass
+        item = self.data[idx]
+        src_lang, tgt_lang = list(item.keys())
+        inputs = self.tokenizer(item[src_lang],
+                    text_target=item[tgt_lang],
+                    max_length=128,
+                    truncation=True,
+                    padding='max_length',
+                    return_tensors="pt")
+        inputs = {k: v.squeeze(0) for k, v in inputs.items()}
+        return inputs
+    
+    @staticmethod
+    def _load_data(json_path: str, processes=32) -> List[Dict[str, str]]:
+        with open(json_path, 'r') as fin:
+            f_json = json.load(fin)
+
+        lang_paths = f_json['data_path']
+        lang_couples = f_json['lang_couples']  # Dict: {lang:lang_1, lang_2:lang3}
         
-    
+        data = []
+        for data_path in lang_paths:
+            with open(data_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            chunk_size = len(lines) // processes + 1
+            chunks = [lines[i:i + chunk_size] for i in range(0, len(lines), chunk_size)]
+            with Pool(processes=processes) as pool:
+                chunk_data = pool.map(TranslationDataset._process_chunk, [(chunk, lang_couples) for chunk in chunks])
+            for chunk in chunk_data:
+                data.extend(chunk)
+        return np.array(data)
 
-def get_lines(path: str) -> List[str]:
-    with open(path, 'r', encoding='utf-8') as f:
-        file = [line.strip() for line in f]
-    return file
+    @staticmethod
+    def _process_chunk(args):
+        chunk, lang_couples = args
+        data = []
+        for line in chunk:
+            item = json.loads(line)
+            for src_lang, tgt_langs in lang_couples.items():
+                for tgt_lang in tgt_langs:
+                    try:
+                        data.append({src_lang: item[src_lang], tgt_lang: item[tgt_lang]})
+                    except KeyError:
+                        print(f"Chunk doesn't have the language: {src_lang}/{tgt_lang}")
+        return data
 
-def _get_raw_dataset(json_path: str):
-    with open(json_path, 'r') as fin:
-        f_json = json.load(fin)
 
-    language_data = {}
-    lang_path_list = f_json['data_path']
-    lang_couples = f_json['lang_couples']   # Dict: {lang:[lang_1, lang_2, ...], ...}
-    for item in lang_path_list:
-        language = item['language']
-        paths = item['path']
-        all_lines = []
-        for path in paths:
-            lines = get_lines(path)
-            all_lines = all_lines + lines
-            
-        language_data[language] = all_lines
-    line_counts = [len(lines) for lines in language_data.values()]
-    assert len(set(line_counts)) == 1, "行数不一致"
-    
-    languages = list(language_data.keys())
+class TranslationIterableDataset(IterableDataset):
+    def __init__(self, json_path, tokenizer, max_length: int = 256, buffer_size: int = 1000):
+        self.json_path = json_path
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+        self.buffer_size = buffer_size
+        self._prepare_data()
 
-    data = {"translation": []}
-    for i in range(line_counts[0]):
-        translation_entry = {lang: language_data[lang][i] for lang in languages}
-        data["translation"].append(translation_entry)
-   
-    dataset = Dataset.from_dict(data)
-    train_test_split = dataset.train_test_split(test_size=0.1)
-    
-    train_dataset = train_test_split['train']
-    val_dataset = train_test_split['test']
+    def _prepare_data(self):
+        with open(self.json_path, 'r') as fin:
+            f_json = json.load(fin)
+        self.lang_paths = f_json['data_path']
+        self.lang_couples = f_json['lang_couples']
 
-    return train_dataset, val_dataset, lang_couples
+    def __iter__(self) -> Iterator[Dict[str, Dict[str, List[int]]]]:
+        buffer = []
+        for data_path in self.lang_paths:
+            with open(data_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    item = json.loads(line)
+                    for src_lang, tgt_langs in self.lang_couples.items():
+                        for tgt_lang in tgt_langs:
+                            try:
+                                data = {src_lang: item[src_lang], tgt_lang: item[tgt_lang]}
+                                buffer.append(self._tokenize_data(data))
+                                if len(buffer) >= self.buffer_size:
+                                    for record in buffer:
+                                        yield record
+                                    buffer = []
+                            except KeyError:
+                                print(f"Item doesn't have the language: {src_lang}/{tgt_lang}")
+        if buffer:
+            for record in buffer:
+                yield record
 
-def _preprocess_function(dataset, src_lang, tgt_lang, tokenizer, is_nllb):
-    if is_nllb:
-        tokenizer.src_lang = src_lang
-        tokenizer.tgt_lang = tgt_lang
-
-    inputs = [item[src_lang] for item in dataset["translation"]]
-    targets = [item[tgt_lang] for item in dataset["translation"]]
-    tokenized_inputs = tokenizer(inputs, text_target=targets, max_length=128, truncation=True, padding=True)
-
-    return tokenized_inputs
-
-def get_mapped_dataset(args, tokenizer):
-    train_dataset, val_dataset, lang_couples = _get_raw_dataset(args.data)
-    
-    final_train_dataset = []
-    final_val_dataset = []
-    for src_lang, tgt_lang_list in lang_couples.items():
-        for tgt_lang in tgt_lang_list:
-            preprocess = partial(_preprocess_function, 
-                                src_lang=src_lang,
-                                tgt_lang=tgt_lang,
-                                tokenizer=tokenizer,
-                                is_nllb=args.is_nllb)
-            map_kwargs={
-                "function": preprocess, 
-                "batched": True,
-                "batch_size": 5000,
-                "writer_batch_size": 5000,
-                "num_proc": 16,
-                "load_from_cache_file": True}
-            tokenized_train_dataset = train_dataset.map(**map_kwargs)
-            tokenized_val_dataset = val_dataset.map(**map_kwargs) 
-
-            final_train_dataset.append(tokenized_train_dataset)
-            final_val_dataset.append(tokenized_val_dataset)
-            
-    final_train_dataset = concatenate_datasets(final_train_dataset)
-    final_val_dataset = concatenate_datasets(final_val_dataset)
-            
-    return final_train_dataset, final_val_dataset 
+    def _tokenize_data(self, data: Dict[str, str]) -> Dict[str, List[int]]:
+        src_lang, tgt_lang = list(data.keys())
+        inputs = self.tokenizer(data[src_lang],
+                                text_target=data[tgt_lang],
+                                max_length=self.max_length,
+                                truncation=True,
+                                padding='max_length',
+                                return_tensors="pt")
+        inputs = {k: v.squeeze(0).tolist() for k, v in inputs.items()}
+        return inputs
 
 
 if __name__ == "__main__":
-    from transformers import AutoTokenizer
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
     import argparse
-    
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', default="data/opus_zh_es.json",       type=str)
+    parser.add_argument('--data', default="data/opus_zh_en.json", type=str)
     parser.add_argument('--is_nllb', action='store_true')
-    tokenizer = AutoTokenizer.from_pretrained("/srv/model/huggingface/opus-mt-zh-en")
+    parser.add_argument('--batch_size', type=int, default=16)
+    parser.add_argument('--num_workers', type=int, default=16)
+    parser.add_argument('--learning_rate', type=float, default=5e-5)
+    parser.add_argument('--num_train_epochs', type=int, default=3)
     args = parser.parse_args()
     
-    _, _ = get_mapped_dataset(args, tokenizer)
+    tokenizer = AutoTokenizer.from_pretrained("/srv/model/huggingface/opus-mt-zh-en")
+    model = AutoModelForSeq2SeqLM.from_pretrained("/srv/model/huggingface/opus-mt-zh-en")
+    
+    train_datasets = TranslationDataset(args.data, tokenizer)
     
 
