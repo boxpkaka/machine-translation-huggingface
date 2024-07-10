@@ -1,12 +1,16 @@
 from prepare_dataset import TranslationDataset
 
-from comet import download_model, load_from_checkpoint
+from nltk.translate.bleu_score import corpus_bleu
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from tqdm import tqdm
+from comet.models import load_from_checkpoint
+from transformers import XLMRobertaTokenizerFast
+
 import sentencepiece as spm
 import sacrebleu
 import argparse
+import textwrap
 import torch
 import os
 
@@ -39,53 +43,52 @@ def _infer_save(args):
                 orig.write(origin + '\n')
                 
                 
-def _eval_with_bleu(args):
+def _eval_with_metric(args):
     result = []
     trans = []
     labels = []
+    torch.set_float32_matmul_precision('high')
+    model = load_from_checkpoint('/srv/model/comet/checkpoints/model.ckpt')
+    tokenizer = XLMRobertaTokenizerFast.from_pretrained('/srv/model/huggingface/xlm-roberta-large')
+    model.tokenizer =tokenizer
+    
+    comet_data = []
     with open(os.path.join(args.save_dir, 'ref'), 'r', encoding='utf-8') as refs, \
         open(os.path.join(args.save_dir, 'tra'), 'r', encoding='utf-8') as tras, \
         open(os.path.join(args.save_dir, 'orig'), 'r', encoding='utf-8') as orig, \
         open(os.path.join(args.save_dir, 'sentence_score'), 'w', encoding='utf-8') as sentence_score, \
         open(os.path.join(args.save_dir, 'corpus_score'), 'w', encoding='utf-8') as corpus_score:
-        for label, translation, orgin in zip(refs, tras, orig):
+        for label, translation, origin in zip(refs, tras, orig):
             label, translation = label.strip(), translation.strip()
             bleu = sacrebleu.sentence_bleu(translation, [label])
-            result.append([bleu, translation, label, orgin.strip()])
-        sorted_result = sorted(result, key=lambda x: x[0].score, reverse=True)
+            result.append([bleu.score, translation, label, origin.strip()])
+            comet_data.append({"src": origin, "mt": translation, "ref": label})
+        
+        outputs = model.predict(comet_data, batch_size=16, gpus=1)
+        comet_scores = outputs['scores']
+        comet_score_all = outputs['system_score']
+        for i in range(len(result)):
+            result[i].append(comet_scores[i])
+        sorted_result = sorted(result, key=lambda x: x[0], reverse=True)
+            
+        for bleu_score, translation, label, origin, comet_score in sorted_result:
+            trans.append(translation)
+            labels.append([label])
+            sentence_score.write(textwrap.dedent(f"""
+                                **** 
+                                BLEU:        {bleu_score:.2f} 
+                                COMET:       {comet_score:.2f}
+                                Source:      {origin} 
+                                Translation: {translation} 
+                                Reference:   {label}
+                                """))
 
-        for item in sorted_result:
-            trans.append(item[1])
-            labels.append([item[2]])
-            sentence_score.write(f"{item[0]} | {item[1]} | {item[2]} | {item[3]} \n")
-
-        all_bleu =  sacrebleu.corpus_bleu(labels, trans)
-        print(all_bleu)
-        corpus_score.write(f"BLEU: {all_bleu.score}")
-
-def _eval_with_comet():
-
-model_path = download_model("Unbabel/wmt22-comet-da")
-model = load_from_checkpoint(model_path)
-data = [
-    {
-        "src": "Dem Feuer konnte Einhalt geboten werden",
-        "mt": "The fire could be stopped",
-        "ref": "They were able to control the fire."
-    },
-    {
-        "src": "Schulen und Kindergärten wurden eröffnet.",
-        "mt": "Schools and kindergartens were open",
-        "ref": "Schools and kindergartens opened"
-    }
-]
-model_output = model.predict(data, batch_size=8, gpus=1)
-print (model_output)
-
-
+        all_bleu =  corpus_bleu(labels, trans)
+        corpus_score.write(f"BLEU:  {all_bleu * 100:.2f} \n")
+        corpus_score.write(f"COMET: {comet_score_all:.2f}")
 
 def _eval(args):
-    # _infer_save(args)
+    _infer_save(args)
     _eval_with_metric(args)
         
 
