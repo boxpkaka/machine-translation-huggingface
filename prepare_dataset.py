@@ -217,7 +217,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_dir)
 
-    train_datasets = TranslationDataset_test(args.data, tokenizer)
+    train_datasets = ShardTranslationDataset(args.data, tokenizer)
     dataloader = DataLoader(dataset=train_datasets, batch_size=2048, num_workers=16)
     
     for batch in tqdm(dataloader):

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-train_data='data/opus_zh_en.json'
+train_data='data/flores101-dev.json'
 val_data='data/flores101-dev.json'
-model_dir='/srv/model/huggingface/opus-mt-zh-en'
+model_dir='/workspace/volume/data3-lianxiang/300-MT-Pro/opus-mt-zh-en'
 
 # Define src_path if necessary or remove this line
 # src_path='your/src/path/here'
@@ -13,8 +13,10 @@ log_path=log/$(date "+%Y-%m-%d").log
 # Specify the GPUs to use
 export CUDA_VISIBLE_DEVICES="0,1,2,3"
 
+
 # Run torchrun command
-torchrun --nproc_per_node=4 --master_port=12355 \
+
+nohup torchrun --nproc_per_node=4 --master_port=66666 \
     train.py \
     --train_data $train_data \
     --val_data $val_data \
@@ -23,4 +25,4 @@ torchrun --nproc_per_node=4 --master_port=12355 \
     --eval_batch 16 \
     --logging_dir './tensorboard/opus-mt-zh-en-625500' \
     --output_dir "./results" \
-    --checkpoint results/checkpoint-625500 2>&1 | tee $log_path
+    --checkpoint results/checkpoint-625500  > $log_path 2>&1 & 
