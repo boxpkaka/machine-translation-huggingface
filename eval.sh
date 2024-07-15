@@ -1,8 +1,8 @@
 #!/bin/bash
 
 data='/home/extrotec/workspace/machine-translation-huggingface/data/flores101-dev.json'
-# model='/srv/model/huggingface/zhenhui_model/zh-en'
-model='/srv/model/huggingface/opus-mt-zh-en'
+# model='/home/extrotec/workspace/machine-translation-huggingface/results/opus-mt-zh-en-ft-718000'
+model='/home/extrotec/workspace/machine-translation-huggingface/results/opus-mt-en-ja-ft-5000'
 
 save_dir='./eval/'$(basename "$model")
 # save_dir='/home/extrotec/workspace/machine-translation-huggingface/eval/sirui'

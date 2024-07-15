@@ -34,5 +34,5 @@ def merge_parallel_to_json(data_dir: str):
     print("JSON file created successfully.")
 
 if __name__ == "__main__":
-    data_dir = '/srv/txtdata/parallel/flores101_dataset/dev/timekettle'
+    data_dir = '/srv/txtdata/mingdong/flores101_dataset/dev/timekettle'
     merge_parallel_to_json(data_dir)
