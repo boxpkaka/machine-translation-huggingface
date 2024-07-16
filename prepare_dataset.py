@@ -139,7 +139,7 @@ class ShardTranslationDataset(Dataset):
 
 
 class IterableTranslationDataset(IterableDataset):
-    def __init__(self, json_path, tokenizer, max_length: int = 256, buffer_size: int = 1000):
+    def __init__(self, json_path, tokenizer, max_length: int = 256, buffer_size: int = 1000000):
         self.json_path = json_path
         self.tokenizer = tokenizer
         self.max_length = max_length

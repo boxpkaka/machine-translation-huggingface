@@ -30,16 +30,16 @@ def main(args):
         'output_dir': args.output_dir,
         'eval_strategy': "steps",
         'save_strategy': "steps",
-        'eval_steps': 500,
-        'save_steps': 500,
+        'eval_steps': args.eval_steps,
+        'save_steps': args.save_steps,
         'save_total_limit': 5,
         'learning_rate': 2e-5,
         'per_device_train_batch_size': args.train_batch,
         'per_device_eval_batch_size': args.eval_batch,
         'weight_decay': 0.01,
-        'num_train_epochs': 10,
+        'num_train_epochs': args.num_epoch,
         'predict_with_generate': True,
-        'gradient_checkpointing': False,
+        'gradient_checkpointing': gradient_checkpoint,
         'bf16': True,
         'report_to': ["tensorboard"],
         'logging_dir': args.logging_dir,
@@ -70,12 +70,14 @@ if __name__ == "__main__":
     parser.add_argument('--val_data',    help='JSON path of dataset', type=str)
     parser.add_argument('--model_dir',   help='model directory', type=str)
     parser.add_argument('--is_nllb',     action='store_true')
-    parser.add_argument('--train_batch',    type=int)
-    parser.add_argument('--eval_batch',     type=int)
-    parser.add_argument('--num_epoch',        type=int)
-    parser.add_argument('--num_gpu',        type=int)
-    parser.add_argument('--checkpoint',  default=None, type=str)
-    parser.add_argument('--logging_dir',  default=None, type=str)
+    parser.add_argument('--train_batch',       type=int)
+    parser.add_argument('--eval_batch',        type=int)
+    parser.add_argument('--num_epoch',         type=int)
+    parser.add_argument('--num_gpu',           type=int)
+    parser.add_argument('--eval_steps',        type=int)
+    parser.add_argument('--save_steps',        type=int)
+    parser.add_argument('--checkpoint',    default=None, type=str)
+    parser.add_argument('--logging_dir',   default=None, type=str)
     parser.add_argument('--output_dir',    default=None, type=str)
     
     args = parser.parse_args()

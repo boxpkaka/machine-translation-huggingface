@@ -9,6 +9,8 @@ train_batch=64
 eval_batch=32
 num_gpu=4
 num_epoch=10
+eval_steps=200
+save_steps=500
 checkpoint=
 # Define src_path if necessary or remove this line
 # src_path='your/src/path/here'
@@ -20,7 +22,7 @@ log_path=log/$(date "+%Y-%m-%d").log
 export CUDA_VISIBLE_DEVICES="0,1,2,3"
 
 # Run torchrun command
-torchrun --nproc_per_node=4 --master_port=12355 \
+torchrun --nproc_per_node=$num_gpu --master_port=12355 \
     train.py \
     --train_data $train_data \
     --val_data $val_data \
@@ -31,5 +33,7 @@ torchrun --nproc_per_node=4 --master_port=12355 \
     --num_epoch $num_epoch \
     --logging_dir $logging_dir \
     --output_dir "./results" \
-    # --checkpoint \
+    --save_steps $save_steps \
+    --eval_steps $eval_steps \
+    ${checkpoint:+--checkpoint $checkpoint} \
     #  2>&1 | tee $log_path
