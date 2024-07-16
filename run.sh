@@ -1,9 +1,15 @@
 #!/bin/bash
 
-train_data='data/opus_zh_en.json'
-val_data='data/flores101-dev.json'
-model_dir='/srv/model/huggingface/opus-mt-zh-en'
+train_data='data/opus_en_ko.json'
+val_data='data/flores101-dev-en-ko.json'
+model_dir='/srv/model/huggingface/opus-mt-ko-en-finetuned-en-to-ko/'
+logging_dir='./tensorboard/test'
 
+train_batch=64
+eval_batch=32
+num_gpu=4
+num_epoch=10
+checkpoint=
 # Define src_path if necessary or remove this line
 # src_path='your/src/path/here'
 # config_name=src_name=$(echo $src_path | awk -F'/' '{print $NF}')
@@ -19,8 +25,11 @@ torchrun --nproc_per_node=4 --master_port=12355 \
     --train_data $train_data \
     --val_data $val_data \
     --model_dir $model_dir \
-    --train_batch 128 \
-    --eval_batch 16 \
-    --logging_dir './tensorboard/opus-mt-zh-en-625500' \
+    --train_batch $train_batch \
+    --eval_batch $eval_batch \
+    --num_gpu $num_gpu \
+    --num_epoch $num_epoch \
+    --logging_dir $logging_dir \
     --output_dir "./results" \
-    --checkpoint results/checkpoint-625500 2>&1 | tee $log_path
+    # --checkpoint \
+    #  2>&1 | tee $log_path

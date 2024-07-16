@@ -6,6 +6,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from tqdm import tqdm
 from comet.models import load_from_checkpoint
 from transformers import XLMRobertaTokenizerFast
+from pecab import PeCab
 
 import sentencepiece as spm
 import sacrebleu
@@ -24,14 +25,17 @@ def tokenize(sentence: str, lang: str) -> str:
         return sentence
     
     sentence = re.sub(r'[^\w\s]', '', sentence)
+    sentence = sentence.replace(' ', '')
     if lang == "ja":
         tagger = MeCab.Tagger("-Owakati")
-        return tagger.parse(sentence.replace(' ', '')).strip()
+        return tagger.parse(sentence).strip()
     if lang == 'zh-cn':
-        tmp = jieba.lcut(sentence.replace(' ', ''))
+        tmp = jieba.cut(sentence)
         return ' '.join(tmp).strip()
     if lang == 'ko':
-        raise NotImplementedError
+        pecab = PeCab()
+        tmp = pecab.morphs(sentence)
+        return ' '.join(tmp).strip()
     
 
 def _infer_zhenhui(args):

@@ -6,16 +6,17 @@ from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
 import argparse
 
 gradient_checkpoint = True
-use_8bit = True
 
 
 def main(args):
     tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
     model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, local_files_only=True)
-    if gradient_checkpoint:
-        model.gradient_checkpointing_enable()
     
-    train_dataset = ShardTranslationDataset(args.train_data, tokenizer)
+    if gradient_checkpoint:
+            model.gradient_checkpointing_enable()
+            # model.config.use_cache = False
+    
+    train_dataset = IterableTranslationDataset(args.train_data, tokenizer)
     val_dataset = TranslationDataset(args.val_data, tokenizer)
 
     max_steps = None
@@ -29,7 +30,7 @@ def main(args):
         'output_dir': args.output_dir,
         'eval_strategy': "steps",
         'save_strategy': "steps",
-        'eval_steps': 20000,
+        'eval_steps': 500,
         'save_steps': 500,
         'save_total_limit': 5,
         'learning_rate': 2e-5,
@@ -44,8 +45,9 @@ def main(args):
         'logging_dir': args.logging_dir,
         'logging_steps': 100,
         'dataloader_num_workers': 16,
-        'max_steps': max_steps
     }
+    if max_steps:
+        train_kwargs['max_steps'] = max_steps
     
     training_args = Seq2SeqTrainingArguments(**train_kwargs)
 
@@ -55,7 +57,6 @@ def main(args):
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         tokenizer=tokenizer,
-        callbacks=[MemoryMonitorCallback(log_dir=args.logging_dir)]
     )
     if args.checkpoint:
         trainer.train(resume_from_checkpoint=args.checkpoint)

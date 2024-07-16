@@ -3,6 +3,7 @@ from typing import List, Dict, Iterator
 from multiprocessing import Pool
 import json
 import os
+import torch
 import numpy as np
 
 
@@ -53,12 +54,14 @@ class TranslationDataset(Dataset):
         data = []
         for line in chunk:
             item = json.loads(line)
-            for src_lang, tgt_langs in lang_couples.items():
-                for tgt_lang in tgt_langs:
-                    try:
-                        data.append({src_lang: item[src_lang], tgt_lang: item[tgt_lang]})
-                    except KeyError:
-                        print(f"Doesn't have the language: {src_lang}/{tgt_lang}")
+            src_lang = next(iter(lang_couples))
+            tgt_lang = lang_couples[src_lang][0]
+            if src_lang not in item or tgt_lang not in item:
+                continue
+            try:
+                data.append({src_lang: item[src_lang], tgt_lang: item[tgt_lang]})
+            except KeyError:
+                print(f"Doesn't have the language: {src_lang}/{tgt_lang}")
         return data
 
 class ShardTranslationDataset(Dataset):
@@ -81,6 +84,7 @@ class ShardTranslationDataset(Dataset):
         local_idx = idx - self.current_min_idx
         item = self.data[local_idx]
         src_lang, tgt_lang = list(item.keys())
+        
         inputs = self.tokenizer(item[src_lang],
                                 text_target=item[tgt_lang],
                                 max_length=self.max_length,
@@ -154,32 +158,34 @@ class IterableTranslationDataset(IterableDataset):
             with open(data_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     item = json.loads(line)
-                    for src_lang, tgt_langs in self.lang_couples.items():
-                        for tgt_lang in tgt_langs:
-                            try:
-                                data = {src_lang: item[src_lang], tgt_lang: item[tgt_lang]}
-                                buffer.append(self._tokenize_data(data))
-                                if len(buffer) >= self.buffer_size:
-                                    for record in buffer:
-                                        yield record
-                                    buffer = []
-                            except KeyError:
-                                print(f"Item doesn't have the language: {src_lang}/{tgt_lang}")
+                    src_lang = next(iter(self.lang_couples))
+                    tgt_lang = self.lang_couples[src_lang][0]
+                    if src_lang not in item or tgt_lang not in item:
+                        continue
+                    if item[src_lang] != "" and item[tgt_lang] != "":
+                        corpus = {src_lang: item[src_lang], tgt_lang: item[tgt_lang]}
+                        data = self._tokenize_data(corpus, src_lang, tgt_lang)
+                        assert isinstance(data['input_ids'], torch.Tensor)
+                        assert isinstance(data['labels'], torch.Tensor)
+                        buffer.append(data)
+                        if len(buffer) >= self.buffer_size:
+                            yield from buffer
+                            buffer = []
+                    else:
+                        continue
         if buffer:
-            for record in buffer:
-                yield record
+            yield from buffer
 
-    def _tokenize_data(self, data: Dict[str, str]) -> Dict[str, List[int]]:
-        src_lang, tgt_lang = list(data.keys())
+    def _tokenize_data(self, data: Dict[str, str], src_lang: str, tgt_lang: str) -> Dict[str, List[int]]:
         inputs = self.tokenizer(data[src_lang],
                                 text_target=data[tgt_lang],
                                 max_length=self.max_length,
                                 truncation=True,
                                 padding='max_length',
-                                return_tensors="pt")
-        inputs = {k: v.squeeze(0).tolist() for k, v in inputs.items()}
+                                return_tensors='pt')
+        inputs = {k: v.squeeze(0) for k, v in inputs.items()}
         return inputs
-   
+
     def _count_samples(self) -> int:
         count = 0
         for data_path in self.lang_paths:
@@ -188,7 +194,9 @@ class IterableTranslationDataset(IterableDataset):
                     item = json.loads(line)
                     for src_lang, tgt_langs in self.lang_couples.items():
                         for tgt_lang in tgt_langs:
-                            if src_lang in item and tgt_lang in item:
+                            if src_lang not in item or tgt_lang not in item:
+                                continue
+                            if item[src_lang] != "" and item[tgt_lang] != "":
                                 count += 1
         return count
     
@@ -205,7 +213,7 @@ if __name__ == "__main__":
     from tqdm import tqdm
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', default="data/opus_zh_en_shard.json", type=str)
+    parser.add_argument('--data', default="data/opus_en_ko.json", type=str)
     parser.add_argument('--is_nllb', action='store_true')
     parser.add_argument('--batch_size', type=int, default=16)
     parser.add_argument('--num_workers', type=int, default=16)
@@ -216,11 +224,11 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("/srv/model/huggingface/opus-mt-zh-en")
     model = AutoModelForSeq2SeqLM.from_pretrained("/srv/model/huggingface/opus-mt-zh-en")
     
-    train_datasets = TranslationDataset_test(args.data, tokenizer)
+    train_datasets = IterableTranslationDataset(args.data, tokenizer)
     dataloader = DataLoader(dataset=train_datasets, batch_size=2048, num_workers=16)
     
     for batch in tqdm(dataloader):
-        # print(batch['input_ids'].shape)
-        pass
+        print(batch)
+        break
 
 
