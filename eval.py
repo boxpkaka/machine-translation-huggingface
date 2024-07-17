@@ -6,6 +6,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from tqdm import tqdm
 from comet.models import load_from_checkpoint
 from transformers import XLMRobertaTokenizerFast
+from pythainlp.tokenize import word_tokenize
 from pecab import PeCab
 
 import sentencepiece as spm
@@ -36,7 +37,10 @@ def tokenize(sentence: str, lang: str) -> str:
         pecab = PeCab()
         tmp = pecab.morphs(sentence)
         return ' '.join(tmp).strip()
-    
+    if lang == 'th':
+        tmp = word_tokenize(sentence, engine='newmm')
+        return ' '.join(tmp).strip()
+
 
 def _infer_zhenhui(args):
     device = torch.device(args.device)
