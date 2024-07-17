@@ -37,9 +37,6 @@ def tokenize(sentence: str, lang: str) -> str:
         pecab = PeCab()
         tmp = pecab.morphs(sentence)
         return ' '.join(tmp).strip()
-    if lang == 'th':
-        tmp = word_tokenize(sentence, engine='newmm')
-        return ' '.join(tmp).strip()
     
 
 def _infer_zhenhui(args):
