@@ -3,6 +3,7 @@ from tensorboard_cpu_memo import MemoryMonitorCallback
 
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
+from transformers import MarianMTModel, MarianConfig
 import argparse
 
 gradient_checkpoint = True
@@ -10,7 +11,12 @@ gradient_checkpoint = True
 
 def main(args):
     tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, local_files_only=True)
+    
+    if args.init_model:
+        config = MarianConfig.from_pretrained(args.model_dir)
+        model = MarianMTModel(config)
+    else:
+        model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, local_files_only=True)
     
     if gradient_checkpoint:
             model.gradient_checkpointing_enable()
@@ -24,7 +30,7 @@ def main(args):
         max_steps = train_dataset.get_max_steps(epochs=args.num_epoch,
                                                 num_gpus=args.num_gpu,
                                                 batch_size=args.train_batch)
-        # logger.info(f"Max steps of training: {max_steps}")
+        print(f"Max steps of training: {max_steps}")
     
     train_kwargs = {
         'output_dir': args.output_dir,
@@ -69,7 +75,8 @@ if __name__ == "__main__":
     parser.add_argument('--train_data', help='JSON path of dataset', type=str)
     parser.add_argument('--val_data',    help='JSON path of dataset', type=str)
     parser.add_argument('--model_dir',   help='model directory', type=str)
-    parser.add_argument('--is_nllb',     action='store_true')
+    parser.add_argument('--is_nllb',        action='store_true')
+    parser.add_argument('--init_model',     action='store_true')
     parser.add_argument('--train_batch',       type=int)
     parser.add_argument('--eval_batch',        type=int)
     parser.add_argument('--num_epoch',         type=int)
