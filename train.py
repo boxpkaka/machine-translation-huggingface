@@ -1,5 +1,4 @@
 from prepare_dataset import TranslationDataset, ShardTranslationDataset, IterableTranslationDataset
-from tensorboard_cpu_memo import MemoryMonitorCallback
 
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
