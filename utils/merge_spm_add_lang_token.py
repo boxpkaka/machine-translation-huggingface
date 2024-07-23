@@ -33,15 +33,15 @@ def get_combined_vocab(spm_path_1: str, spm_path_2: str, save_dir: str):
             combined_vocab[k] = cnt
             share_vocab_set.remove(k)
             cnt += 1
-
+    combined_vocab['<pad>'] = cnt
     with open(os.path.join(save_dir, 'vocab.json'), 'w', encoding='utf-8') as fout:
-        json.dump(combined_vocab, fout, ensure_ascii=False)
+        json.dump(combined_vocab, fout, ensure_ascii=False, indent=4)
 
 
 if __name__ == "__main__":
     spm_path_1 = sys.argv[1]
     spm_path_2 = sys.argv[2]
-    save_path = sys.argv[3]
-    get_combined_vocab(spm_path_1, spm_path_2, save_path)
+    save_dir = sys.argv[3]
+    get_combined_vocab(spm_path_1, spm_path_2, save_dir)
 
     
