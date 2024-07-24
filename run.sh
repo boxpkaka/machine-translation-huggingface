@@ -1,9 +1,9 @@
 #!/bin/bash
 
-train_data='data/opus_en_ko.json'
-val_data='data/flores101-dev-en-ko.json'
-model_dir='/srv/model/huggingface/opus-mt-ko-en-finetuned-en-to-ko/'
-logging_dir='./tensorboard/test'
+train_data='data/39m-zh-fr.json'
+val_data='data/flores101-dev-zh-fr.json'
+model_dir='/srv/model/huggingface/opus-mt-zh-fr-mingdong/'
+logging_dir='./tensorboard/opus-mt-zh-fr'
 
 train_batch=64
 eval_batch=32

@@ -1,8 +1,9 @@
 from prepare_dataset import TranslationDataset, ShardTranslationDataset, IterableTranslationDataset
-from tensorboard_cpu_memo import MemoryMonitorCallback
 
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
+from transformers import MarianMTModel, MarianConfig
+from loguru import logger
 import argparse
 
 gradient_checkpoint = True
@@ -10,10 +11,18 @@ gradient_checkpoint = True
 
 def main(args):
     tokenizer = AutoTokenizer.from_pretrained(args.model_dir, local_files_only=True)
-    model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, local_files_only=True)
     
+    if args.init_model:
+        config = MarianConfig.from_pretrained(args.model_dir)
+        model = MarianMTModel(config)
+        logger.info(f"Init model, use config: \n{config}")
+    else:
+        model = AutoModelForSeq2SeqLM.from_pretrained(args.model_dir, local_files_only=True)
+        logger.info(f"Load model from {args.model_dir}. ")
+        
     if gradient_checkpoint:
             model.gradient_checkpointing_enable()
+            logger.info('Use gradient checkpoint. ')
             # model.config.use_cache = False
     
     train_dataset = IterableTranslationDataset(args.train_data, tokenizer)
@@ -21,10 +30,11 @@ def main(args):
 
     max_steps = None
     if isinstance(train_dataset, IterableTranslationDataset):
+        logger.info(f"Use iterable dataset, counting the max steps. ")
         max_steps = train_dataset.get_max_steps(epochs=args.num_epoch,
                                                 num_gpus=args.num_gpu,
                                                 batch_size=args.train_batch)
-        # logger.info(f"Max steps of training: {max_steps}")
+        logger.info(f"Max steps of training: {max_steps}")
     
     train_kwargs = {
         'output_dir': args.output_dir,
@@ -43,7 +53,7 @@ def main(args):
         'bf16': True,
         'report_to': ["tensorboard"],
         'logging_dir': args.logging_dir,
-        'logging_steps': 100,
+        'logging_steps': 50,
         'dataloader_num_workers': 16,
     }
     if max_steps:
@@ -59,8 +69,10 @@ def main(args):
         tokenizer=tokenizer,
     )
     if args.checkpoint:
+        logger.info('Resume training from checkpoint: {args.checkpoint}. ')
         trainer.train(resume_from_checkpoint=args.checkpoint)
     else:
+        logger.info('Starting training from scratch. ')
         trainer.train()
 
 
@@ -69,7 +81,8 @@ if __name__ == "__main__":
     parser.add_argument('--train_data', help='JSON path of dataset', type=str)
     parser.add_argument('--val_data',    help='JSON path of dataset', type=str)
     parser.add_argument('--model_dir',   help='model directory', type=str)
-    parser.add_argument('--is_nllb',     action='store_true')
+    parser.add_argument('--is_nllb',        action='store_true')
+    parser.add_argument('--init_model',     action='store_true')
     parser.add_argument('--train_batch',       type=int)
     parser.add_argument('--eval_batch',        type=int)
     parser.add_argument('--num_epoch',         type=int)

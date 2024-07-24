@@ -1,8 +1,8 @@
 #!/bin/bash
 
-data='/home/extrotec/workspace/machine-translation-huggingface/data/flores101-dev-en-ko.json'
+data=$1
 # model='/home/extrotec/workspace/machine-translation-huggingface/results/opus-mt-zh-en-ft-718000'
-model='/srv/model/huggingface/opus-mt-ko-en-finetuned-en-to-ko/'
+model=$2
 
 save_dir='./eval/'$(basename "$model")
 # save_dir='/home/extrotec/workspace/machine-translation-huggingface/eval/sirui'
