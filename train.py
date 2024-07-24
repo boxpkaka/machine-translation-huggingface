@@ -25,16 +25,20 @@ def main(args):
             logger.info('Use gradient checkpoint. ')
             # model.config.use_cache = False
     
-    train_dataset = IterableTranslationDataset(args.train_data, tokenizer)
-    val_dataset = TranslationDataset(args.val_data, tokenizer)
-
     max_steps = None
-    if isinstance(train_dataset, IterableTranslationDataset):
+    if args.use_iterable_dataset:
+        train_dataset = IterableTranslationDataset(args.train_data, 
+                                                   tokenizer, 
+                                                   buffer_size=args.buffer_size)
         logger.info(f"Use iterable dataset, counting the max steps. ")
         max_steps = train_dataset.get_max_steps(epochs=args.num_epoch,
                                                 num_gpus=args.num_gpu,
                                                 batch_size=args.train_batch)
         logger.info(f"Max steps of training: {max_steps}")
+    else:
+        train_dataset = TranslationDataset(args.train_data, tokenizer)
+        
+    val_dataset = TranslationDataset(args.val_data, tokenizer)
     
     train_kwargs = {
         'output_dir': args.output_dir,
@@ -81,11 +85,13 @@ if __name__ == "__main__":
     parser.add_argument('--train_data', help='JSON path of dataset', type=str)
     parser.add_argument('--val_data',    help='JSON path of dataset', type=str)
     parser.add_argument('--model_dir',   help='model directory', type=str)
-    parser.add_argument('--is_nllb',        action='store_true')
-    parser.add_argument('--init_model',     action='store_true')
+    parser.add_argument('--is_nllb',                 action='store_true')
+    parser.add_argument('--init_model',              action='store_true')
+    parser.add_argument('--use_iterable_dataset',    action='store_true')
     parser.add_argument('--train_batch',       type=int)
     parser.add_argument('--eval_batch',        type=int)
     parser.add_argument('--num_epoch',         type=int)
+    parser.add_argument('--buffer_size',       type=int)
     parser.add_argument('--num_gpu',           type=int)
     parser.add_argument('--eval_steps',        type=int)
     parser.add_argument('--save_steps',        type=int)

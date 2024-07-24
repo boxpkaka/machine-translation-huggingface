@@ -1,56 +1,47 @@
 import sentencepiece as spm
+import json
+import sys
 import os
 
 
-def get_combined_vocab(model_dir):
-    model_dir = '/srv/model/huggingface/opus-mt-zh-en'
-    sp_en = spm.SentencePieceProcessor()
-    sp_en.load(os.path.join(model_dir,'target.spm'))
+def get_combined_vocab(spm_path_1: str, spm_path_2: str, save_dir: str):
+    os.makedirs(save_dir, exist_ok=True)
+    
+    sp_1 = spm.SentencePieceProcessor()
+    sp_1.load(spm_path_1)
 
-    sp_zh = spm.SentencePieceProcessor()
-    sp_zh.load(os.path.join(model_dir,'source.spm'))
+    sp_2 = spm.SentencePieceProcessor()
+    sp_2.load(spm_path_2)
 
-    vocab_en = [sp_en.id_to_piece(id) for id in range(sp_en.get_piece_size())]
-    vocab_zh = [sp_zh.id_to_piece(id) for id in range(sp_zh.get_piece_size())]
-    print(len(vocab_en))
-    # 去重并合并词汇表，中文词汇添加在英文词汇之后
-    combined_vocab = vocab_en + [token for token in vocab_zh if token not in vocab_en]
+    vocab_1_set = {sp_1.id_to_piece(id) for id in range(sp_1.get_piece_size())}
+    vocab_2_set = {sp_2.id_to_piece(id) for id in range(sp_1.get_piece_size())}
+    share_vocab_set = vocab_1_set | vocab_2_set
+    
+    vocab_1 = {sp_1.id_to_piece(id): id for id in range(sp_1.get_piece_size())}
+    vocab_2 = {sp_2.id_to_piece(id): id for id in range(sp_2.get_piece_size())}
 
-    # 添加特殊的语言标识符
-    special_tokens = ['<en>', '<zh>']
-    combined_vocab = special_tokens + combined_vocab
-    # print(combined_vocab[:100])
-    # 将合并的词汇表写入文件
-    with open('merge_spm/combined_vocab.txt', 'w', encoding='utf-8') as f:
-        for token in combined_vocab:
-            f.write(f'{token}\n')
+    combined_vocab = {}
+    cnt = 0
+    for k in vocab_1:
+        if k in share_vocab_set:
+            combined_vocab[k] = cnt
+            share_vocab_set.remove(k)
+            cnt += 1
+    
+    for k in vocab_2:
+        if k in share_vocab_set:
+            combined_vocab[k] = cnt
+            share_vocab_set.remove(k)
+            cnt += 1
+    combined_vocab['<pad>'] = cnt
+    with open(os.path.join(save_dir, 'vocab.json'), 'w', encoding='utf-8') as fout:
+        json.dump(combined_vocab, fout, ensure_ascii=False, indent=4)
 
-    with open(f'merge_spm/vocab.txt', 'w', encoding='utf-8') as f:
-        for token in combined_vocab:
-            f.write(f'{token}\n')
-
-    # 创建一个新的SentencePiece模型配置文件
-    with open(f'merge_spm/config.json', 'w', encoding='utf-8') as f:
-        f.write('{"model_type": "bpe"}')
-
-    # 使用SentencePiece模型生成新的模型文件
-    spm.SentencePieceTrainer.train(
-        input=f'merge_spm/vocab.txt',
-        model_prefix='en-zh-duo',
-        vocab_size=len(combined_vocab),
-        user_defined_symbols='<en>,<zh>',
-        character_coverage=1.0,
-        model_type='bpe'
-    )
-# def train_spm_model(model_dir):
-#     combined_vocab = get_combined_vocab(model_dir)
-#     spm.SentencePieceTrainer.train(input='merge_spm/combined_vocab.txt', 
-#                                    model_prefix='merge_spm/combined_model',
-#                                    vocab_size=len(combined_vocab), 
-#                                    model_type='bpe',
-#                                    accept_language='zh,en')
 
 if __name__ == "__main__":
-    get_combined_vocab('/srv/model/huggingface/opus-mt-zh-en')
-    # train_spm_model('/srv/model/huggingface/opus-mt-zh-en')
+    spm_path_1 = sys.argv[1]
+    spm_path_2 = sys.argv[2]
+    save_dir = sys.argv[3]
+    get_combined_vocab(spm_path_1, spm_path_2, save_dir)
+
     

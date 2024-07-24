@@ -41,7 +41,6 @@ def tokenize(sentence: str, lang: str) -> str:
         tmp = word_tokenize(sentence, engine='newmm')
         return ' '.join(tmp).strip()
 
-
 def _infer_zhenhui(args):
     device = torch.device(args.device)
     tokenizer = AutoTokenizer.from_pretrained(args.model)
