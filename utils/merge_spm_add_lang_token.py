@@ -41,7 +41,7 @@ def get_combined_vocab(spm_path_1: str, spm_path_2: str, save_dir: str):
 if __name__ == "__main__":
     spm_path_1 = sys.argv[1]
     spm_path_2 = sys.argv[2]
-    save_path = sys.argv[3]
-    get_combined_vocab(spm_path_1, spm_path_2, save_path)
+    save_dir = sys.argv[3]
+    get_combined_vocab(spm_path_1, spm_path_2, save_dir)
 
     
