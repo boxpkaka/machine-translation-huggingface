@@ -1,8 +1,9 @@
 #!/bin/bash
 
-data='/home/extrotec/workspace/machine-translation-huggingface/data/flores101-dev-en-ko.json'
-# model='/home/extrotec/workspace/machine-translation-huggingface/results/opus-mt-zh-en-ft-718000'
-model='/srv/model/huggingface/opus-mt-ko-en-finetuned-en-to-ko/'
+data=$1
+model=$2
+deivce=$3
+only_eval=$4
 
 save_dir='./eval/'$(basename "$model")
 # save_dir='/home/extrotec/workspace/machine-translation-huggingface/eval/sirui'
@@ -14,10 +15,11 @@ python \
     eval.py \
     --data $data \
     --model $model \
-    --batch_size 32 \
+    --batch_size 64 \
     --num_workers 16 \
-    --save_dir $save_dir \
-    --device 'cuda:0'
+    --save_dir $save_dir-$(basename "$data") \
+    --device 'cuda:'$deivce \
+    ${only_eval:+--only_eval} \
 
 
 
