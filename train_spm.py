@@ -17,7 +17,8 @@ def train_spm(text_file: str, language: str, vocab_size: int, save_dir: str):
         byte_fallback=True,
         unk_id=0,  
         bos_id=1,  
-        eos_id=2   
+        eos_id=2,
+        train_extremely_large_corpus=True
     )
 
     sp = spm.SentencePieceProcessor()
