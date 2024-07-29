@@ -1,6 +1,7 @@
 from torch.utils.data import Dataset, IterableDataset
 from typing import List, Dict, Iterator
 from multiprocessing import Pool
+from loguru import logger
 import json
 import os
 import torch
@@ -157,7 +158,11 @@ class IterableTranslationDataset(IterableDataset):
         for data_path in self.lang_paths:
             with open(data_path, 'r', encoding='utf-8') as f:
                 for line in f:
-                    item = json.loads(line)
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f'IterableDataset: {e} - {line}')
+                        continue
                     src_lang = next(iter(self.lang_couples))
                     tgt_lang = self.lang_couples[src_lang][0]
                     if src_lang not in item or tgt_lang not in item:
@@ -191,7 +196,11 @@ class IterableTranslationDataset(IterableDataset):
         for data_path in self.lang_paths:
             with open(data_path, 'r', encoding='utf-8') as f:
                 for line in f:
-                    item = json.loads(line)
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError as e:
+                        logger.warning(f'IterableDataset: {e} - {line}')
+                        continue
                     for src_lang, tgt_langs in self.lang_couples.items():
                         for tgt_lang in tgt_langs:
                             if src_lang not in item or tgt_lang not in item:
