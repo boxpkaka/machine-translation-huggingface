@@ -161,7 +161,6 @@ class IterableTranslationDataset(IterableDataset):
                     try:
                         item = json.loads(line)
                     except json.JSONDecodeError as e:
-                        logger.warning(f'IterableDataset: {e} - {line}')
                         continue
                     src_lang = next(iter(self.lang_couples))
                     tgt_lang = self.lang_couples[src_lang][0]
@@ -199,7 +198,6 @@ class IterableTranslationDataset(IterableDataset):
                     try:
                         item = json.loads(line)
                     except json.JSONDecodeError as e:
-                        logger.warning(f'IterableDataset: {e} - {line}')
                         continue
                     for src_lang, tgt_langs in self.lang_couples.items():
                         for tgt_lang in tgt_langs:
