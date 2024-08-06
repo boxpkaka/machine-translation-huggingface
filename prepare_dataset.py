@@ -145,17 +145,19 @@ class IterableTranslationDataset(IterableDataset):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.buffer_size = buffer_size
+        self.data_paths = None
+        self.lang_couples = None
         self._prepare_data()
 
     def _prepare_data(self):
         with open(self.json_path, 'r') as fin:
             f_json = ujson.load(fin)
-        self.lang_paths = f_json['data_path']
+        self.data_paths = f_json['data_path']
         self.lang_couples = f_json['lang_couples']
 
     def __iter__(self) -> Iterator[Dict[str, Dict[str, List[int]]]]:
         buffer = []
-        for data_path in self.lang_paths:
+        for data_path in self.data_paths:
             with open(data_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     try:
@@ -195,25 +197,26 @@ class IterableTranslationDataset(IterableDataset):
         src_lang = list(self.lang_couples.keys())[0]
         tgt_lang = self.lang_couples[src_lang][0]
         
-        # Use the num file if it exists
-        if os.path.exists(self.json_path + '.num'):
-            logger.info(f"Use {self.json_path + '.num'} instead of counting!")
-            with open(self.json_path + '.num', 'r') as f_cout:
+        if os.path.exists(self.data_paths[0] + '.num'):
+            # Use the num file if it exists
+            num_file_path = self.data_paths[0] + '.num'
+            logger.info(f"Use {num_file_path} instead of counting!")
+            with open(num_file_path, 'r') as f_cout:
                 count_dict = ujson.load(f_cout)
                 count = min(count_dict[src_lang], count_dict[tgt_lang])
-                return count
-
-        for data_path in self.lang_paths:
-            with open(data_path, 'r', encoding='utf-8') as f:
-                for line in f:
-                    try:
-                        item = ujson.loads(line)
-                    except ujson.JSONDecodeError as e:
-                        continue
-                    if src_lang not in item or tgt_lang not in item:
-                        continue
-                    if item[src_lang] != "" and item[tgt_lang] != "":
-                        count += 1
+        else:
+            for data_path in self.lang_paths:
+                with open(data_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        try:
+                            item = ujson.loads(line)
+                        except ujson.JSONDecodeError as e:
+                            continue
+                        if src_lang not in item or tgt_lang not in item:
+                            continue
+                        if item[src_lang] != "" and item[tgt_lang] != "":
+                            count += 1
+        logger.info(f"Number of dataset {count}")
         return count
     
     def get_max_steps(self, epochs: int, num_gpus: int, batch_size: int) -> int:
