@@ -2,7 +2,7 @@ from torch.utils.data import Dataset, IterableDataset
 from typing import List, Dict, Iterator
 from multiprocessing import Pool
 from loguru import logger
-import json
+import ujson
 import os
 import torch
 import numpy as np
@@ -32,7 +32,7 @@ class TranslationDataset(Dataset):
     @staticmethod
     def _load_data(json_path: str, processes=32) -> List[Dict[str, str]]:
         with open(json_path, 'r') as fin:
-            f_json = json.load(fin)
+            f_json = ujson.load(fin)
 
         lang_paths = f_json['data_path']
         lang_couples = f_json['lang_couples']  # Dict: {lang:lang_1, lang_2:lang3}
@@ -54,7 +54,7 @@ class TranslationDataset(Dataset):
         chunk, lang_couples = args
         data = []
         for line in chunk:
-            item = json.loads(line)
+            item = ujson.loads(line)
             src_lang = next(iter(lang_couples))
             tgt_lang = lang_couples[src_lang][0]
             if src_lang not in item or tgt_lang not in item:
@@ -97,14 +97,14 @@ class ShardTranslationDataset(Dataset):
 
     def _compute_file_lengths(self):
         with open(self.json_files[0], 'r', encoding='utf-8') as f:
-            first_file_data = json.load(f)
+            first_file_data = ujson.load(f)
             first_file_length = len(first_file_data)
         
         num_files = len(self.json_files)
         file_lengths = [first_file_length] * (num_files - 1)
 
         with open(self.json_files[-1], 'r', encoding='utf-8') as f:
-            last_file_data = json.load(f)
+            last_file_data = ujson.load(f)
             last_file_length = len(last_file_data)
 
         file_lengths.append(last_file_length)
@@ -125,11 +125,11 @@ class ShardTranslationDataset(Dataset):
 
     def _load_data_from_file(self, file_idx: int) -> List[Dict[str, str]]:
         with open(self.json_files[file_idx], 'r', encoding='utf-8') as f:
-            return json.load(f)
+            return ujson.load(f)
         
     def _init_get_data(self, json_path: str):
         with open(json_path, 'r') as fin:
-            f_json = json.load(fin)
+            f_json = ujson.load(fin)
 
         shard_dir = f_json['data_path'][0]
         
@@ -149,7 +149,7 @@ class IterableTranslationDataset(IterableDataset):
 
     def _prepare_data(self):
         with open(self.json_path, 'r') as fin:
-            f_json = json.load(fin)
+            f_json = ujson.load(fin)
         self.lang_paths = f_json['data_path']
         self.lang_couples = f_json['lang_couples']
 
@@ -159,8 +159,8 @@ class IterableTranslationDataset(IterableDataset):
             with open(data_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     try:
-                        item = json.loads(line)
-                    except json.JSONDecodeError as e:
+                        item = ujson.loads(line)
+                    except ujson.JSONDecodeError as e:
                         continue
                     src_lang = next(iter(self.lang_couples))
                     tgt_lang = self.lang_couples[src_lang][0]
@@ -192,19 +192,28 @@ class IterableTranslationDataset(IterableDataset):
 
     def _count_samples(self) -> int:
         count = 0
+        src_lang = list(self.lang_couples.keys())[0]
+        tgt_lang = self.lang_couples[src_lang][0]
+        
+        # Use the num file if it exists
+        if os.path.exists(self.json_path + '.num'):
+            logger.info(f"Use {self.json_path + '.num'} instead of counting!")
+            with open(self.json_path + '.num', 'r') as f_cout:
+                count_dict = ujson.load(f_cout)
+                count = min(count_dict[src_lang], count_dict[tgt_lang])
+                return count
+
         for data_path in self.lang_paths:
             with open(data_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     try:
-                        item = json.loads(line)
-                    except json.JSONDecodeError as e:
+                        item = ujson.loads(line)
+                    except ujson.JSONDecodeError as e:
                         continue
-                    for src_lang, tgt_langs in self.lang_couples.items():
-                        for tgt_lang in tgt_langs:
-                            if src_lang not in item or tgt_lang not in item:
-                                continue
-                            if item[src_lang] != "" and item[tgt_lang] != "":
-                                count += 1
+                    if src_lang not in item or tgt_lang not in item:
+                        continue
+                    if item[src_lang] != "" and item[tgt_lang] != "":
+                        count += 1
         return count
     
     def get_max_steps(self, epochs: int, num_gpus: int, batch_size: int) -> int:
